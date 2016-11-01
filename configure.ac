@@ -959,8 +959,14 @@ AC_CONFIG_FILES([
   tests/key-tests/Makefile
   tests/scripts/Makefile
   tests/slow/Makefile
-  tests/suite/Makefile
 ])
+
+if test "$full_test_suite" = yes;then
+AC_CONFIG_FILES([
+  tests/suite/Makefile
+  tests/suite/afl/Makefile
+])
+fi
 
 AC_OUTPUT
 
