@@ -19,8 +19,8 @@
 # along with this file; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
-EXTRA_DIST = afl-dn.in/dn1.der afl-dn.in/dn2.der \
-	afl-dn.in/dn3.der afl-dn.in/dn4.der
+EXTRA_DIST = afl-dn.in/dn1.der afl-dn.in/dn2.der afl-dn.in/dn3.der afl-dn.in/dn4.der \
+	afl-cert.in/cert1.der af-cert.in/cert2.der af-cert.in/cert3.der
 
 AM_CFLAGS = $(WARN_CFLAGS) $(WERROR_CFLAGS)
 AM_CPPFLAGS = \
@@ -38,7 +38,7 @@ LDADD = ../../../lib/libgnutls.la \
 	../../../gl/libgnu.la \
 	$(LIBSOCKET) $(INET_NTOP_LIB) $(INET_PTON_LIB)
 
-noinst_SCRIPTS = afl-dn.sh
+noinst_SCRIPTS = afl-dn.sh afl-cert.sh
 
-noinst_PROGRAMS = afl-dn-decode
+noinst_PROGRAMS = afl-dn-decode afl-cert-decode
 
