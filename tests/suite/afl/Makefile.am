@@ -20,7 +20,9 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 EXTRA_DIST = afl-dn.in/dn1.der afl-dn.in/dn2.der afl-dn.in/dn3.der afl-dn.in/dn4.der \
-	afl-cert.in/cert1.der af-cert.in/cert2.der af-cert.in/cert3.der
+	afl-cert.in/cert1.der af-cert.in/cert2.der af-cert.in/cert3.der \
+	afl-pkcs8.in/key1.der afl-pkcs8.in/key2.der afl-pkcs8.in/key3.der \
+	afl-pkcs8.in/key4.der
 
 AM_CFLAGS = $(WARN_CFLAGS) $(WERROR_CFLAGS)
 AM_CPPFLAGS = \
@@ -38,7 +40,7 @@ LDADD = ../../../lib/libgnutls.la \
 	../../../gl/libgnu.la \
 	$(LIBSOCKET) $(INET_NTOP_LIB) $(INET_PTON_LIB)
 
-noinst_SCRIPTS = afl-dn.sh afl-cert.sh
+noinst_SCRIPTS = afl-dn.sh afl-cert.sh afl-pkcs8.sh
 
-noinst_PROGRAMS = afl-dn-decode afl-cert-decode
+noinst_PROGRAMS = afl-dn-decode afl-cert-decode afl-pkcs8-decode
 
