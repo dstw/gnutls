@@ -43,11 +43,6 @@
 #include <c-ctype.h>
 #include "sockets.h"
 
-#ifdef HAVE_LIBIDN
-#include <idna.h>
-#include <idn-free.h>
-#endif
-
 #define MAX_BUF 4096
 
 /* Functions to manipulate sockets
@@ -387,6 +382,7 @@ socket_open(socket_st * hd, const char *hostname, const char *service,
 	char buffer[MAX_BUF + 1];
 	char portname[16] = { 0 };
 	char *a_hostname = (char*)hostname;
+	gnutls_datum_t out;
 
 	memset(hd, 0, sizeof(*hd));
 
@@ -398,14 +394,18 @@ socket_open(socket_st * hd, const char *hostname, const char *service,
 		hd->rdata.size = rdata->size;
 	}
 
-#ifdef HAVE_LIBIDN
-	err = idna_to_ascii_8z(hostname, &a_hostname, IDNA_ALLOW_UNASSIGNED);
-	if (err != IDNA_SUCCESS) {
-		fprintf(stderr, "Cannot convert %s to IDNA: %s\n", hostname,
-			idna_strerror(err));
-		exit(1);
+	err = gnutls_idna_map(hostname, strlen(hostname), &out, 0);
+	if (err < 0) {
+		if (err == GNUTLS_E_UNIMPLEMENTED_FEATURE) {
+			a_hostname = strdup(hostname);
+		} else {
+			fprintf(stderr, "Cannot convert %s to IDNA: %s\n", hostname,
+				gnutls_strerror(err));
+			exit(1);
+		}
+	} else {
+		a_hostname = (char*)out.data;
 	}
-#endif
 	hd->hostname = strdup(hostname);
 
 	if (msg != NULL)
@@ -530,9 +530,7 @@ socket_open(socket_st * hd, const char *hostname, const char *service,
 	hd->ptr = ptr;
 	hd->addr_info = res;
 	hd->rdata.data = NULL;
-#ifdef HAVE_LIBIDN
-	idn_free(a_hostname);
-#endif
+	gnutls_free(a_hostname);
 	return;
 }
 
