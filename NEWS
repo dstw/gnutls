@@ -28,6 +28,9 @@ See the end for copying conditions.
    not ship it; it can be used with the '--with-included-unistring'
    option to configure script.
 
+** libgnutls: Use IDNA2008 instead of IDNA2003; this introduces a libidn2
+   dependency replacing libidn.
+
 ** libgnutls: GNUTLS_CRT_PRINT_ONELINE flag on gnutls_x509_crt_print()
    will print the SHA256 key-ID instead of a certificate fingerprint.
 
