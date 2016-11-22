@@ -948,3 +948,5 @@ tests/pkcs11-privkey-export
 tests/dtls1-2-mtu-check
 doc/gendocs_template_min
 build/
+lib/unistring/unicase.h
+lib/unistring/unicase/special-casing-table.h
