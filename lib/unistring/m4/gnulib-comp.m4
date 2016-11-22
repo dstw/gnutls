@@ -54,10 +54,20 @@ AC_DEFUN([unistring_EARLY],
   # Code from module stdbool:
   # Code from module stdint:
   # Code from module sys_types:
+  # Code from module unicase/base:
+  # Code from module unicase/cased:
+  # Code from module unicase/empty-prefix-context:
+  # Code from module unicase/empty-suffix-context:
+  # Code from module unicase/ignorable:
+  # Code from module unicase/special-casing:
+  # Code from module unicase/tolower:
+  # Code from module unicase/u8-casemap:
+  # Code from module unicase/u8-tolower:
   # Code from module unictype/base:
   # Code from module unictype/category-Zs:
   # Code from module unictype/category-test:
   # Code from module unictype/combining-class:
+  # Code from module unictype/property-soft-dotted:
   # Code from module uninorm/base:
   # Code from module uninorm/canonical-decomposition:
   # Code from module uninorm/composition:
@@ -110,11 +120,20 @@ AC_DEFUN([unistring_INIT],
   gl_STDINT_H
   gl_SYS_TYPES_H
   AC_PROG_MKDIR_P
+  gl_LIBUNISTRING_LIBHEADER([0.9.4], [unicase.h])
+  AC_REQUIRE([AC_C_INLINE])
+  gl_LIBUNISTRING_MODULE([0.9.1], [unicase/empty-prefix-context])
+  gl_LIBUNISTRING_MODULE([0.9.1], [unicase/empty-suffix-context])
+  AC_REQUIRE([AC_C_INLINE])
+  gl_LIBUNISTRING_MODULE([0.9.6], [unicase/tolower])
+  gl_LIBUNISTRING_MODULE([0.9.6], [unicase/u8-tolower])
   gl_LIBUNISTRING_LIBHEADER([0.9.4], [unictype.h])
   gl_LIBUNISTRING_MODULE([0.9.6], [unictype/category-Zs])
   AC_REQUIRE([AC_C_INLINE])
   gl_LIBUNISTRING_MODULE([0.9.5], [unictype/category-test])
   gl_LIBUNISTRING_MODULE([0.9.6], [unictype/combining-class])
+  AC_REQUIRE([AC_C_INLINE])
+  gl_LIBUNISTRING_MODULE([0.9.6], [unictype/property-soft-dotted])
   gl_LIBUNISTRING_LIBHEADER([0.9.4], [uninorm.h])
   gl_LIBUNISTRING_MODULE([0.9.6], [uninorm/canonical-decomposition])
   gl_LIBUNISTRING_MODULE([0.9.6], [uninorm/composition])
@@ -295,6 +314,25 @@ AC_DEFUN([unistring_FILE_LIST], [
   lib/stdbool.in.h
   lib/stdint.in.h
   lib/sys_types.in.h
+  lib/unicase.in.h
+  lib/unicase/cased.c
+  lib/unicase/cased.h
+  lib/unicase/caseprop.h
+  lib/unicase/context.h
+  lib/unicase/empty-prefix-context.c
+  lib/unicase/empty-suffix-context.c
+  lib/unicase/ignorable.c
+  lib/unicase/ignorable.h
+  lib/unicase/simple-mapping.h
+  lib/unicase/special-casing-table.gperf
+  lib/unicase/special-casing.c
+  lib/unicase/special-casing.h
+  lib/unicase/tolower.c
+  lib/unicase/tolower.h
+  lib/unicase/u-casemap.h
+  lib/unicase/u8-casemap.c
+  lib/unicase/u8-tolower.c
+  lib/unicase/unicasemap.h
   lib/unictype.in.h
   lib/unictype/bitmap.h
   lib/unictype/categ_Zs.c
@@ -302,6 +340,8 @@ AC_DEFUN([unistring_FILE_LIST], [
   lib/unictype/categ_test.c
   lib/unictype/combiningclass.c
   lib/unictype/combiningclass.h
+  lib/unictype/pr_soft_dotted.c
+  lib/unictype/pr_soft_dotted.h
   lib/uninorm.in.h
   lib/uninorm/canonical-decomposition.c
   lib/uninorm/composition-table.gperf
