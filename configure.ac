@@ -469,8 +469,8 @@ fi
 PKG_CHECK_MODULES(CMOCKA, cmocka, [with_cmocka=yes], [with_cmocka=no])
 AM_CONDITIONAL(HAVE_CMOCKA, test "$with_cmocka" != "no")
 
-AC_ARG_WITH(idn, AS_HELP_STRING([--without-idn],
-                                 [disable support for libidn]),
+AC_ARG_WITH(idn2, AS_HELP_STRING([--without-idn],
+                                 [disable support for libidn2]),
             try_libidn="$withval", 
             try_libidn=yes)
 
@@ -480,24 +480,18 @@ if ! $PKG_CONFIG --atleast-version=3.3 nettle; then
 fi
 AM_CONDITIONAL(WITH_OLD_NETTLE, test "$with_old_nettle" != "no")
 
-if test "$try_libidn" = yes;then
-PKG_CHECK_MODULES(LIBIDN, libidn >= 0.5.6, [with_libidn=yes], [with_libidn=no])
-if test "$with_libidn" != "no";then
-        if ! $PKG_CONFIG --atleast-version=1.31 libidn; then
-	    with_buggy_libidn=yes
-        fi
 
+
+if test "$try_libidn" = yes;then
+AC_LIB_HAVE_LINKFLAGS(idn2,, [#include <idn2.h>], [idn2_lookup_u8(0, 0, 0);])
+if test "$HAVE_LIBIDN2" = "yes";then
+        with_libidn=yes
 	AC_DEFINE([HAVE_LIBIDN], 1, [Build IDNA support])
-	if test "x$GNUTLS_REQUIRES_PRIVATE" = "x"; then
-		GNUTLS_REQUIRES_PRIVATE="Requires.private: libidn"
-	else
-		GNUTLS_REQUIRES_PRIVATE="${GNUTLS_REQUIRES_PRIVATE}, libidn"
-	fi
 else
         with_libidn=no
         AC_MSG_WARN([[
 *** 
-*** libidn was not found. IDNA support will be disabled.
+*** libidn2 was not found. IDNA2008 support will be disabled.
 *** ]])
 fi
 
@@ -506,7 +500,6 @@ else
 fi
 
 AM_CONDITIONAL(HAVE_LIBIDN, test "$with_libidn" != "no")
-AM_CONDITIONAL(HAVE_BUGGY_LIBIDN, test "$with_buggy_libidn" = "yes")
 
 AC_ARG_ENABLE(non-suiteb-curves,
   AS_HELP_STRING([--disable-non-suiteb-curves], [disable curves not in SuiteB]),
@@ -1025,7 +1018,7 @@ if features are disabled)
   ECDHE support:        $ac_enable_ecdhe
   Anon auth support:    $ac_enable_anon
   Heartbeat support:    $ac_enable_heartbeat
-  IDNA support:         $with_libidn
+  IDNA2008 support:     $with_libidn
   Self checks:          $enable_self_checks
   Non-SuiteB curves:    $enable_non_suiteb
   FIPS140 mode:         $enable_fips

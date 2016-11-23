@@ -26,9 +26,9 @@
 #include <uninorm.h>
 #include <unistr.h>
 #include <unictype.h>
-#ifdef HAVE_LIBIDN
-# include <idna.h>
-# include <idn-free.h>
+#include <unicase.h>
+#ifdef HAVE_LIBIDN2
+# include <idn2.h>
 #endif
 
 /**
@@ -145,8 +145,8 @@ int gnutls_utf8_password_normalize(const unsigned char *password, unsigned passw
 	return ret;
 }
 
-#ifdef HAVE_LIBIDN
-/*-
+#ifdef HAVE_LIBIDN2
+/**
  * gnutls_idna_map:
  * @input: contain the UTF-8 formatted domain name
  * @ilen: the length of the provided string
@@ -154,7 +154,7 @@ int gnutls_utf8_password_normalize(const unsigned char *password, unsigned passw
  * @flags: should be zero
  *
  * This function will convert the provided UTF-8 domain name, to
- * its IDNA2003 mapping.
+ * its IDNA2008 mapping.
  *
  * If GnuTLS is compiled without libidn2 support, then this function
  * will return %GNUTLS_E_UNIMPLEMENTED_FEATURE.
@@ -162,12 +162,16 @@ int gnutls_utf8_password_normalize(const unsigned char *password, unsigned passw
  * Returns: %GNUTLS_E_INVALID_UTF8_STRING on invalid UTF-8 data, or 0 on success.
  *
  * Since: 3.5.7
- -*/
+ **/
 int gnutls_idna_map(const char *input, unsigned ilen, gnutls_datum_t *out, unsigned flags)
 {
-	char *idna = NULL;
-	int rc, ret;
-	gnutls_datum_t istr;
+	size_t nrm_size = 0;
+	size_t final_size = 0;
+	uint8_t *final = NULL;
+	uint8_t *nrm = NULL;
+	uint8_t *nrms = NULL;
+	uint8_t *idna = NULL;
+	int iret, ret;
 
 	if (ilen == 0) {
 		out->data = (uint8_t*)gnutls_strdup("");
@@ -177,31 +181,70 @@ int gnutls_idna_map(const char *input, unsigned ilen, gnutls_datum_t *out, unsig
 		return 0;
 	}
 
-	ret = _gnutls_set_strdatum(&istr, input, ilen);
-	if (ret < 0) {
+	/* check for invalid UTF-8 */
+	if (u8_check((uint8_t*)input, ilen) != NULL) {
 		gnutls_assert();
-		return ret;
+		return GNUTLS_E_INVALID_UTF8_STRING;
 	}
 
-	rc = idna_to_ascii_8z((char*)istr.data, &idna, 0);
-	if (rc != IDNA_SUCCESS) {
+	/* Case fold */
+	nrm =  u8_tolower((uint8_t*)input, ilen, 0, UNINORM_NFC, NULL, &nrm_size);
+	if (nrm == NULL) {
 		gnutls_assert();
-		_gnutls_debug_log("unable to convert name '%s' to IDNA format: %s\n", istr.data, idna_strerror(rc));
 		ret = GNUTLS_E_INVALID_UTF8_STRING;
 		goto fail;
 	}
 
-	if (gnutls_malloc != malloc) {
-		ret = _gnutls_set_strdatum(out, idna, strlen(idna));
-	} else  {
-		out->data = (unsigned char*)idna;
-		out->size = strlen(idna);
-		idna = NULL;
-		ret = 0;
+	nrms = gnutls_malloc(nrm_size+1);
+	if (nrms == NULL) {
+		gnutls_assert();
+		ret = GNUTLS_E_MEMORY_ERROR;
+		goto fail;
 	}
+
+	memcpy(nrms, nrm, nrm_size);
+	nrms[nrm_size] = 0;
+
+	iret = idn2_lookup_u8(nrms, &idna, 0);
+	if (iret != IDN2_OK) {
+		gnutls_assert();
+		_gnutls_debug_log("IDNA2008 conversion error: %s\n", idn2_strerror(iret));
+		ret = GNUTLS_E_IDNA_ERROR;
+		idna = NULL;
+		goto fail;
+	}
+
+	/* copy to output with null terminator */
+	final_size = strlen((char*)idna);
+	if (final_size < nrm_size) { /* re-use allocation */
+		final = nrms;
+		nrms = NULL;
+	} else {
+		final = gnutls_malloc(final_size+1);
+	}
+	if (final == NULL) {
+		gnutls_assert();
+		ret = GNUTLS_E_MEMORY_ERROR;
+		goto fail;
+	}
+
+	memcpy(final, idna, final_size);
+	final[final_size] = 0;
+
+	out->data = final;
+	out->size = final_size;
+
+	gnutls_free(nrm);
+	gnutls_free(nrms);
+	idn2_free(idna);
+
+	return 0;
+
  fail:
-	idn_free(idna);
-	gnutls_free(istr.data);
+	idn2_free(idna);
+	gnutls_free(final);
+	gnutls_free(nrm);
+	gnutls_free(nrms);
 	return ret;
 }
 #else

@@ -44,7 +44,7 @@ int gnutls_utf8_password_normalize(const uint8_t *password, unsigned password_le
 	gnutls_utf8_password_normalize((unsigned char*)p, plen, out, \
 		ignore_errs?(GNUTLS_UTF8_IGNORE_ERRS):0)
 
-#ifndef HAVE_LIBIDN
+#ifndef HAVE_LIBIDN2
 inline static
 int _gnutls_idna_map(const char *input, unsigned ilen, gnutls_datum_t *out, unsigned flags)
 {
@@ -57,8 +57,6 @@ int _gnutls_idna_map(const char *input, unsigned ilen, gnutls_datum_t *out, unsi
 	return 0;
 }
 # define gnutls_idna_map _gnutls_idna_map
-#else
-int gnutls_idna_map(const char * input, unsigned ilen, gnutls_datum_t *out, unsigned flags);
 #endif
 
 void _gnutls_str_cpy(char *dest, size_t dest_tot_size, const char *src);

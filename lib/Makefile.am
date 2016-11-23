@@ -139,7 +139,7 @@ thirdparty_libadd = $(LTLIBZ) $(LTLIBINTL) $(LIBSOCKET) $(LTLIBNSL) \
 	$(LTLIBICONV) $(P11_KIT_LIBS) $(LIB_SELECT)
 
 if HAVE_LIBIDN
-thirdparty_libadd += $(LIBIDN_LIBS)
+thirdparty_libadd += $(LTLIBIDN2)
 endif
 
 if HAVE_LIBUNISTRING

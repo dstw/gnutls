@@ -31,8 +31,6 @@
 #include <gnutls/gnutls.h>
 #include <cmocka.h>
 
-int gnutls_idna_map(const char *input, unsigned ilen, gnutls_datum_t *out, unsigned flags);
-
 #define MATCH_FUNC(fname, str, normalized) \
 static void fname(void **glob_state) \
 { \
