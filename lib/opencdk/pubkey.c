@@ -537,6 +537,7 @@ cdk_pk_get_keyid (cdk_pubkey_t pk, u32 * keyid)
 {
   u32 lowbits = 0;
   byte buf[24];
+  int rc;
 
   if (pk && (!pk->keyid[0] || !pk->keyid[1]))
     {
@@ -546,7 +547,13 @@ cdk_pk_get_keyid (cdk_pubkey_t pk, u32 * keyid)
           size_t n;
 
           n = MAX_MPI_BYTES;
-          _gnutls_mpi_print (pk->mpi[0], p, &n);
+          rc = _gnutls_mpi_print (pk->mpi[0], p, &n);
+          if (rc < 0 || n < 8)
+            {
+              keyid[0] = keyid[1] = (u32)-1;
+              return (u32)-1;
+            }
+
           pk->keyid[0] =
             p[n - 8] << 24 | p[n - 7] << 16 | p[n - 6] << 8 | p[n - 5];
           pk->keyid[1] =
