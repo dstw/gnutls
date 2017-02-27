@@ -20,7 +20,7 @@
 
 ACLOCAL_AMFLAGS = -I ../m4 -I ../gl/m4
 
-EXTRA_DIST = priority_options.gperf common.mk
+EXTRA_DIST = priority_options.gperf supported_exts.gperf common.mk
 BUILT_SOURCES = pkix_asn1_tab.c gnutls_asn1_tab.c priority_options.h
 
 SUBDIRS = includes x509 auth ext algorithms extras accelerated
@@ -118,7 +118,7 @@ HFILES = abstract_int.h debug.h compress.h cipher.h	\
 	srp.h auth/srp_kx.h auth/srp_passwd.h	\
 	file.h supplemental.h crypto.h random.h system.h\
 	locks.h mbuffers.h ecc.h pin.h fips.h \
-	priority_options.h
+	priority_options.h supported_exts.h
 
 if ENABLE_PKCS11
 HFILES += pkcs11_int.h pkcs11x.h
@@ -235,5 +235,8 @@ gnutls_asn1_tab.c: $(srcdir)/gnutls.asn
 	-asn1Parser $(srcdir)/gnutls.asn gnutls_asn1_tab.c
 
 priority_options.h: $(srcdir)/priority_options.gperf
+	-gperf --global-table -t $^ > $@-tmp && mv $@-tmp $@
+
+supported_exts.h: $(srcdir)/supported_exts.gperf
 	-gperf --global-table -t $^ > $@-tmp && mv $@-tmp $@
 
