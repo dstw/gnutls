@@ -38,10 +38,10 @@ typedef struct common_info {
 	const char *secret_key;
 	const char *privkey;
 	const char *pubkey;
-	int pkcs8;
 	int incert_format;
 	int outcert_format;
 	const char *cert;
+	int no_pkcs8;
 
 	const char *request;
 	const char *crl;
@@ -51,6 +51,7 @@ typedef struct common_info {
 	unsigned bits;
 	const char *sec_param;
 	const char *pkcs_cipher;
+	int ask_pass;
 	const char *password;
 	int null_password;
 	int empty_password;
@@ -83,14 +84,14 @@ typedef struct common_info {
 static inline
 void switch_to_pkcs8_when_needed(common_info_st *cinfo, gnutls_x509_privkey_t key, unsigned key_type)
 {
-	if (cinfo->pkcs8)
+	if (!cinfo->no_pkcs8)
 		return;
 
 	if ((key_type == GNUTLS_PK_RSA_PSS || key_type == GNUTLS_PK_EDDSA_ED25519)) {
 		if (cinfo->verbose)
 			fprintf(stderr, "Assuming --pkcs8 is given; %s private keys can only be exported in PKCS#8 format\n",
 				gnutls_pk_algorithm_get_name(key_type));
-		cinfo->pkcs8 = 1;
+		cinfo->no_pkcs8 = 0;
 		if (cinfo->password == NULL)
 			cinfo->password = "";
 	}
@@ -98,7 +99,7 @@ void switch_to_pkcs8_when_needed(common_info_st *cinfo, gnutls_x509_privkey_t ke
 	if (gnutls_x509_privkey_get_seed(key, NULL, NULL, 0) != GNUTLS_E_INVALID_REQUEST) {
 		if (cinfo->verbose)
 			fprintf(stderr, "Assuming --pkcs8 is given; provable private keys can only be exported in PKCS#8 format\n");
-		cinfo->pkcs8 = 1;
+		cinfo->no_pkcs8 = 0;
 		if (cinfo->password == NULL)
 			cinfo->password = "";
 	}

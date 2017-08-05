@@ -322,7 +322,7 @@ load_x509_private_key(int mand, common_info_st * info)
 		app_exit(1);
 	}
 
-	if (info->pkcs8) {
+	if (info->ask_pass) {
 		pass = get_password(info, &flags, 0);
 		ret =
 		    gnutls_x509_privkey_import_pkcs8(key, &dat,
@@ -1291,7 +1291,7 @@ print_private_key(FILE *outfile, common_info_st * cinfo, gnutls_x509_privkey_t k
 
 	switch_to_pkcs8_when_needed(cinfo, key, gnutls_x509_privkey_get_pk_algorithm(key));
 
-	if (!cinfo->pkcs8) {
+	if (cinfo->no_pkcs8) {
 
 		size = lbuffer_size;
 		ret = gnutls_x509_privkey_export(key, cinfo->outcert_format,
@@ -1305,8 +1305,13 @@ print_private_key(FILE *outfile, common_info_st * cinfo, gnutls_x509_privkey_t k
 		unsigned int flags = 0;
 		const char *pass;
 
-		pass = get_password(cinfo, &flags, 0);
-		flags |= cipher_to_flags(cinfo->pkcs_cipher);
+		if (cinfo->ask_pass) {
+			pass = get_password(cinfo, &flags, 0);
+			flags |= cipher_to_flags(cinfo->pkcs_cipher);
+		} else {
+			pass = NULL;
+			flags |= GNUTLS_PKCS_PLAIN;
+		}
 
 		size = lbuffer_size;
 		ret =

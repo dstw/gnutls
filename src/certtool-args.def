@@ -217,6 +217,8 @@ flag = {
 flag = {
     name      = pkcs8;
     value     = 8;
+    enabled;
+    disable   = "no";
     descrip   = "Use PKCS #8 format for private keys";
     doc = "";
 };

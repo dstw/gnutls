@@ -1371,7 +1371,10 @@ static void cmd_parser(int argc, char **argv)
 	if (HAVE_OPT(LOAD_PUBKEY))
 		cinfo.pubkey = OPT_ARG(LOAD_PUBKEY);
 
-	cinfo.pkcs8 = HAVE_OPT(PKCS8);
+	/* The --pkcs8 option was being used to encrypt private keys.
+	 * Let it be for backwards compatibility */
+	cinfo.ask_pass = HAVE_OPT(PKCS8);
+	cinfo.no_pkcs8 = !(ENABLED_OPT(PKCS8));
 	cinfo.incert_format = incert_format;
 	cinfo.outcert_format = outcert_format;
 
@@ -1403,9 +1406,9 @@ static void cmd_parser(int argc, char **argv)
 
 	if (HAVE_OPT(PASSWORD)) {
 		cinfo.password = OPT_ARG(PASSWORD);
-		if (HAVE_OPT(GENERATE_PRIVKEY) && cinfo.pkcs8 == 0) {
-			fprintf(stderr, "Assuming PKCS #8 format...\n");
-			cinfo.pkcs8 = 1;
+		if (HAVE_OPT(GENERATE_PRIVKEY) && cinfo.no_pkcs8) {
+			fprintf(stderr, "A private key can be encrypted only in PKCS#8 format...\n");
+			app_exit(1);
 		}
 	}
 
@@ -1763,9 +1766,6 @@ void privkey_info(common_info_st * cinfo)
 		fprintf(stderr, "import error: %s\n", gnutls_strerror(ret));
 		app_exit(1);
 	}
-	/* On this option we may import from PKCS #8 but we are always exporting
-	 * to our format. */
-	cinfo->pkcs8 = 0;
 
 	print_private_key(outfile, cinfo, key);
 
