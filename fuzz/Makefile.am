@@ -5,8 +5,7 @@ AM_LDFLAGS = -static
 LDADD = ../gl/libgnu.la ../lib/libgnutls.la \
  $(LIBOBJS) $(GETADDRINFO_LIB) $(HOSTENT_LIB) $(INET_NTOP_LIB)\
  $(LIBSOCKET) $(LIB_CLOCK_GETTIME) $(LIB_NANOSLEEP) $(LIB_POLL) $(LIB_PTHREAD)\
- $(LIB_SELECT) $(LIBTHREAD) $(SERVENT_LIB) \
- $(LIBS)
+ $(LIB_SELECT) $(LIBTHREAD) $(SERVENT_LIB)
 
 FUZZERS = \
  gnutls_base64_decoder_fuzzer$(EXEEXT) \
