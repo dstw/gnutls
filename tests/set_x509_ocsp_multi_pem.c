@@ -138,6 +138,8 @@ void doit(void)
 							       GNUTLS_X509_FMT_PEM);
 	if (ret < 0)
 		fail("ocsp file set failed: %s\n", gnutls_strerror(ret));
+	if (ret != 2)
+		fail("ocsp file set didn't return the expected answer: %d\n", ret);
 
 	ret = gnutls_certificate_set_x509_trust_mem(clicred, &ca3_cert, GNUTLS_X509_FMT_PEM);
 	if (ret < 0) {

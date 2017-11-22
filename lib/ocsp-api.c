@@ -373,8 +373,13 @@ gnutls_certificate_set_ocsp_status_request_file(gnutls_certificate_credentials_t
 						const char *response_file,
 						unsigned idx)
 {
-	return gnutls_certificate_set_ocsp_status_request_file2(sc, response_file, idx,
-								GNUTLS_X509_FMT_DER);
+	int ret;
+	ret = gnutls_certificate_set_ocsp_status_request_file2(sc, response_file,
+							       idx, GNUTLS_X509_FMT_DER);
+	if (ret >= 0)
+		return 0;
+	else
+		return ret;
 }
 
 /**
@@ -406,8 +411,8 @@ gnutls_certificate_set_ocsp_status_request_file(gnutls_certificate_credentials_t
  * If the response provided does not match any certificates present
  * in the chain, the code %GNUTLS_E_OCSP_MISMATCH_WITH_CERTS is returned.
  *
- * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned,
- *   otherwise a negative error code is returned.
+ * Returns: On success, the number of loaded responses is returned,
+ *   otherwise a negative error code.
  *
  * Since: 3.6.xx
  **/
@@ -517,8 +522,8 @@ static int append_response(gnutls_certificate_credentials_t sc, unsigned idx,
  * If the response provided does not match any certificates present
  * in the chain, the code %GNUTLS_E_OCSP_MISMATCH_WITH_CERTS is returned.
  *
- * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned,
- *   otherwise a negative error code is returned.
+ * Returns: On success, the number of loaded responses is returned,
+ *   otherwise a negative error code.
  *
  * Since: 3.6.xx
  **/
@@ -532,6 +537,7 @@ gnutls_certificate_set_ocsp_status_request_mem(gnutls_certificate_credentials_t 
 	gnutls_datum_t der = {NULL, 0};
 	gnutls_ocsp_resp_t resp = NULL;
 	int ret;
+	unsigned int nresp = 0;
 
 	ret = gnutls_ocsp_resp_init(&resp);
 	if (ret < 0) {
@@ -568,6 +574,7 @@ gnutls_certificate_set_ocsp_status_request_mem(gnutls_certificate_credentials_t 
 				gnutls_assert();
 				goto cleanup;
 			}
+			nresp++;
 
 			gnutls_free(der.data);
 			der.data = NULL;
@@ -582,7 +589,7 @@ gnutls_certificate_set_ocsp_status_request_mem(gnutls_certificate_credentials_t 
 			p.size -= p.data - resp_data->data;
 		} while(p.size > 0);
 
-		ret = 0;
+		ret = nresp;
 	} else {
 		/* DER: load a single response */
 
@@ -615,6 +622,8 @@ gnutls_certificate_set_ocsp_status_request_mem(gnutls_certificate_credentials_t 
 			gnutls_assert();
 			goto cleanup;
 		}
+
+		ret = 1;
 	}
 
  cleanup:
