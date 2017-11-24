@@ -155,7 +155,6 @@ static void terminate(void)
 	int status;
 
 	kill(child, SIGTERM);
-	wait(&status);
 	exit(1);
 }
 
