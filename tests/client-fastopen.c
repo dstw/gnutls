@@ -103,8 +103,7 @@ static void client(int fd, struct sockaddr *connect_addr, socklen_t connect_addr
 	while (ret < 0 && gnutls_error_is_fatal(ret) == 0);
 
 	if (ret < 0) {
-		fail("client: Handshake failed\n");
-		gnutls_perror(ret);
+		fail("client: Handshake failed: %s\n", gnutls_strerror(ret));
 		exit(1);
 	} else {
 		if (debug)
@@ -307,6 +306,7 @@ void doit(void)
 	} else {
 		fd = socket(AF_INET, SOCK_STREAM, 0);
 
+		usleep(1000000);
 		client(fd, (struct sockaddr*)&saddr, addrlen);
 		exit(0);
 	}
