@@ -248,6 +248,11 @@ static void server(int fd)
 		success("server: finished\n");
 }
 
+static void ch_handler(int sig)
+{
+	return;
+}
+
 void doit(void)
 {
 	int ret;
@@ -256,6 +261,7 @@ void doit(void)
 	int listener;
 	int fd;
 
+	signal(SIGCHLD, ch_handler);
 	signal(SIGPIPE, SIG_IGN);
 
 	listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
