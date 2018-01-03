@@ -102,26 +102,7 @@ _gnutls_range_max_lh_pad(gnutls_session_t session, ssize_t data_length,
  **/
 int gnutls_record_can_use_length_hiding(gnutls_session_t session)
 {
-	int ret;
-	record_parameters_st *record_params;
-
-	if (get_num_version(session) == GNUTLS_SSL3)
-		return 0;
-
-	ret =
-	    _gnutls_epoch_get(session, EPOCH_WRITE_CURRENT,
-			      &record_params);
-	if (ret < 0) {
-		return 0;
-	}
-
-	switch (_gnutls_cipher_is_block(record_params->cipher)) {
-	case CIPHER_BLOCK:
-		return 1;
-	case CIPHER_STREAM:
-	default:
-		return 0;
-	}
+	return 0;
 }
 
 /**
