@@ -15,6 +15,11 @@ See the end for copying conditions.
    is deprecated and on our use we don't need readdir() to be thread safe
    (which it is in most common platforms).
 
+** libgnutls: gnutls_record_can_use_length_hiding always fails. The length
+   hiding functionality has been deprecated since long time, and was a no-op.
+   As such gnutls_record_can_use_length_hiding returned value reflects the
+   current status quo.
+
 ** p11tool: Mark all generated objects as sensitive by default.
 
 ** API and ABI modifications:
