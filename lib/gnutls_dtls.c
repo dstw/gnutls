@@ -36,6 +36,7 @@
 #include <gnutls_state.h>
 #include <gnutls/dtls.h>
 #include <algorithms.h>
+#include <assert.h>
 
 void _dtls_async_timer_delete(gnutls_session_t session)
 {
@@ -582,19 +583,12 @@ void gnutls_dtls_set_mtu(gnutls_session_t session, unsigned int mtu)
 
 static int record_overhead(const cipher_entry_st * cipher,
 			   const mac_entry_st * mac,
-			   gnutls_compression_method_t comp)
+			   gnutls_compression_method_t comp,
+			   unsigned max)
 {
 	int total = 0;
-	int t, ret;
-
-	if (_gnutls_cipher_is_block(cipher) == CIPHER_BLOCK) {
-		t = _gnutls_cipher_get_explicit_iv_size(cipher);
-		total += t;
-
-		/* padding */
-		t = _gnutls_cipher_get_block_size(cipher);
-		total += t;
-	}
+	int ret, t;
+	int hash_len = 0;
 
 	if (mac->id == GNUTLS_MAC_AEAD) {
 		total += AEAD_EXPLICIT_DATA_SIZE;
@@ -609,6 +603,18 @@ static int record_overhead(const cipher_entry_st * cipher,
 
 	if (comp != GNUTLS_COMP_NULL)
 		total += EXTRA_COMP_SIZE;
+
+	if (_gnutls_cipher_is_block(cipher) == CIPHER_BLOCK) {
+		int exp_iv;
+
+		exp_iv = _gnutls_cipher_get_explicit_iv_size(cipher);
+
+		if (max)
+			total += 2*exp_iv; /* block == iv size */
+		else
+			total += exp_iv + 1;
+	}
+
 
 	return total;
 }
@@ -659,7 +665,7 @@ size_t gnutls_est_record_overhead_size(gnutls_protocol_t version,
 	else
 		total = DTLS_RECORD_HEADER_SIZE;
 
-	total += record_overhead(c, m, comp);
+	total += record_overhead(c, m, comp, 1);
 
 	return total;
 }
@@ -687,7 +693,7 @@ static int record_overhead_rt(gnutls_session_t session)
 
 	/* requires padding */
 	return record_overhead(params->cipher, params->mac,
-			       params->compression_algorithm);
+			       params->compression_algorithm, 1);
 }
 
 /**
@@ -732,14 +738,29 @@ unsigned int gnutls_dtls_get_data_mtu(gnutls_session_t session)
 {
 	int mtu = session->internals.dtls.mtu;
 	int overhead;
+	record_parameters_st *params;
+	int ret, k, hash_size, block;
 
 	mtu -= RECORD_HEADER_SIZE(session);
 
-	overhead = record_overhead_rt(session);
-	if (overhead < 0)
+	if (session->internals.initial_negotiation_completed == 0)
 		return mtu;
 
-	return mtu - overhead;
+	ret = _gnutls_epoch_get(session, EPOCH_WRITE_CURRENT, &params);
+	if (ret < 0)
+		return mtu;
+
+	if (params->cipher->aead || !params->cipher->block)
+		return mtu-record_overhead(params->cipher, params->mac, params->compression_algorithm, 0);
+
+	/* CIPHER_BLOCK: in CBC ciphers guess the data MTU as it depends on residues
+	 */
+	hash_size = _gnutls_mac_get_algo_len(params->mac);
+	block = _gnutls_cipher_get_explicit_iv_size(params->cipher);
+	assert(_gnutls_cipher_get_block_size(params->cipher) == block);
+
+	k = ((mtu)/block) - 2;
+	return (k+1)*block - hash_size - 1;
 }
 
 /**
@@ -764,7 +785,9 @@ unsigned int gnutls_dtls_get_data_mtu(gnutls_session_t session)
  **/
 int gnutls_dtls_set_data_mtu(gnutls_session_t session, unsigned int mtu)
 {
-	int overhead = record_overhead_rt(session);
+	int overhead;
+
+	overhead = record_overhead_rt(session);
 
 	/* You can't call this until the session is actually running */
 	if (overhead < 0)
