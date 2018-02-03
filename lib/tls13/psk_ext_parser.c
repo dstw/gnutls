@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
-#include "tls13/psk_parser.h"
+#include "tls13/psk_ext_parser.h"
 
 static int advance_to_end_of_object(struct psk_ext_parser_st *p)
 {

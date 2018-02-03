@@ -26,11 +26,11 @@
 #include "mem.h"
 #include "str.h"
 #include "tls13/finished.h"
-#include "tls13/psk_parser.h"
 #include "tls13/session_ticket.h"
 #include "auth/psk_passwd.h"
 #include <ext/session_ticket.h>
 #include <ext/pre_shared_key.h>
+#include "tls13/psk_ext_parser.h"
 
 typedef struct {
 	struct tls13_nst_st *session_ticket;
