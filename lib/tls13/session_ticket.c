@@ -489,7 +489,8 @@ cleanup:
  */
 int _gnutls13_unpack_session_ticket(gnutls_session_t session,
 		gnutls_datum_t *data,
-		gnutls_datum_t *rms, gnutls_mac_algorithm_t *kdf_id)
+		gnutls_datum_t *rms, gnutls_datum_t *nonce,
+		gnutls_mac_algorithm_t *kdf_id)
 {
 	int ret;
 	const unsigned char *p = data->data;
@@ -563,6 +564,8 @@ int _gnutls13_unpack_session_ticket(gnutls_session_t session,
 
 	rms->data = ticket_data.rms;
 	rms->size = ticket_data.rms_len;
+	nonce->data = ticket_data.ticket_nonce;
+	nonce->size = ticket_data.ticket_nonce_len;
 	*kdf_id = ticket_data.kdf_id;
 
 	return decrypted.size;

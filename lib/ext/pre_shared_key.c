@@ -41,7 +41,7 @@ typedef struct {
 static int
 compute_psk_from_ticket(const mac_entry_st *prf,
 		const uint8_t *rms,
-		struct tls13_nst_st *ticket, gnutls_datum_t *key)
+		gnutls_datum_t *nonce, gnutls_datum_t *key)
 {
 	int ret;
 	unsigned hash_size = prf->output_size;
@@ -54,7 +54,7 @@ compute_psk_from_ticket(const mac_entry_st *prf,
 
 	ret = _tls13_expand_secret2(prf,
 			label, strlen(label),
-			ticket->ticket_nonce.data, ticket->ticket_nonce.size,
+			nonce->data, nonce->size,
 			rms,
 			hash_size,
 			key->data);
@@ -255,7 +255,7 @@ client_send_params(gnutls_session_t session,
 			rms = session->key.proto.tls13.ap_rms_original.data;
 			ret = compute_psk_from_ticket(prf,
 					rms,
-					&ticket, &key);
+					&ticket.ticket_nonce, &key);
 			if (ret < 0) {
 				gnutls_assert();
 				goto cleanup;
@@ -362,74 +362,22 @@ server_send_params(gnutls_session_t session, gnutls_buffer_t extdata)
 	return 2;
 }
 
-static int
-server_find_binder(const unsigned char **data_p, long *len_p,
-		int psk_index, gnutls_datum_t *binder_recvd)
-{
-	uint8_t binder_len;
-	int cur_index = 0, binder_found = 0;
-	const unsigned char *data = *data_p;
-	long len = *len_p;
-
-	while (len > 0) {
-		binder_len = *data;
-		if (binder_len == 0)
-			return gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
-
-		DECR_LEN(len, 1);
-		data++;
-
-		if (cur_index == psk_index) {
-			binder_recvd->data = gnutls_malloc(binder_len);
-			if (!binder_recvd->data)
-				return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-
-			binder_recvd->size = binder_len;
-			memcpy(binder_recvd->data, data, binder_len);
-
-			DECR_LEN(len, binder_len);
-			data += binder_len;
-
-			binder_found = 1;
-			break;
-		}
-
-		DECR_LEN(len, binder_len);
-		data += binder_len;
-
-		binder_len = 0;
-		cur_index++;
-	}
-
-	*len_p = len;
-	*data_p = data;
-
-	return (binder_found ? binder_len : gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS));
-}
-
 static int server_recv_params(gnutls_session_t session,
 		const unsigned char *data, long len,
 		const gnutls_psk_server_credentials_t pskcred)
 {
 	int ret;
-	const mac_entry_st *prf;
+	const mac_entry_st *prf = NULL;
 	gnutls_datum_t full_client_hello;
-	psk_ext_st *priv = NULL;
-	uint16_t ttl_identities_len;
 	uint8_t binder_value[MAX_HASH_SIZE];
 	int psk_index = -1;
-	gnutls_datum_t binder_recvd;
-	gnutls_datum_t username, key;
-	gnutls_datum_t ticket_data = { NULL, 0 }, rms = { NULL, 0 };
+	gnutls_datum_t username = { NULL, 0 }, key = { NULL, 0 };
+	gnutls_datum_t binder_recvd = { NULL, 0 };
+	gnutls_datum_t ticket_data = { NULL, 0 }, rms = { NULL, 0 }, nonce = { NULL, 0 };
 	gnutls_mac_algorithm_t kdf_id;
 	unsigned hash_size;
-	struct psk_parser_st psk_parser;
+	struct psk_ext_parser_st psk_parser;
 	struct psk_st psk;
-	struct ticket_st *ticket = NULL;
-
-	memset(&binder_recvd, 0, sizeof(gnutls_datum_t));
-	memset(&username, 0, sizeof(gnutls_datum_t));
-	memset(&key, 0, sizeof(gnutls_datum_t));
 
 	if (pskcred) {
 		/* No credentials - this extension is not applicable */
@@ -442,51 +390,39 @@ static int server_recv_params(gnutls_session_t session,
 		ret = _gnutls_psk_pwd_find_entry(session, pskcred->hint, &key);
 		if (ret < 0)
 			return ret;
-
-		if (pskcred->hint) {
-			username.data = (unsigned char *) pskcred->hint;
-			username.size = strlen(pskcred->hint);
-
-			ret = _gnutls_psk_pwd_find_entry(session, pskcred->hint, &key);
-			if (ret < 0)
-				return ret;
-		}
 	}
 
-	ttl_identities_len = _gnutls_read_uint16(data);
-	/* The client advertised no PSKs */
-	if (ttl_identities_len == 0)
+	ret = _gnutls13_psk_ext_parser_init(&psk_parser, data, len);
+	if (ret == 0) {
+		/* The client advertised no PSKs */
 		return 0;
+	} else if (ret < 0) {
+		return gnutls_assert_val(ret);
+	}
 
-	DECR_LEN(len, 2);
-	data += 2;
-
-	_gnutls13_psk_parser_init(&psk_parser, data, len, ttl_identities_len);
-
-	while (_gnutls13_psk_parser_next(&psk_parser, &psk) >= 0) {
+	while (_gnutls13_psk_ext_parser_next_psk(&psk_parser, &psk) >= 0) {
 		/*
 		 * First check if this is an out-of-band PSK.
 		 * If it's not, try to decrypt it, as it might be a session ticket.
 		 */
-		if (username.size == psk.identity.size &&
+		if (pskcred && username.size == psk.identity.size &&
 		    safe_memcmp(username.data, psk.identity.data, psk.identity.size) == 0) {
 			psk_index = psk.selected_index;
+			prf = _gnutls_mac_to_entry(pskcred->tls13_binder_algo);
 			break;
 		}
 
-		if (psk.identity.size < sizeof(struct ticket_st))
-			break;
-
-		ticket = (struct ticket_st *) psk.identity.data;
 		ticket_data.data = psk.identity.data;
 		ticket_data.size = psk.identity.size;
-		if (_gnutls13_unpack_session_ticket(session, &ticket_data, &rms, &kdf_id) > 0) {
+		if (_gnutls13_unpack_session_ticket(session, &ticket_data, &rms, &nonce, &kdf_id) > 0) {
 			psk_index = psk.selected_index;
+			prf = _gnutls_mac_to_entry(kdf_id);
+			if (!prf)
+				return gnutls_assert_val(GNUTLS_E_INVALID_SESSION);
 
-			key.data = ticket->encrypted_state;
-			key.size = ticket->encrypted_state_len;
-			gnutls_free(ticket->encrypted_state);
-			ticket->encrypted_state = NULL;
+			ret = compute_psk_from_ticket(prf, rms.data, &nonce, &key);
+			if (ret < 0)
+				return gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
 
 			session->internals.resumption_requested = 1;
 
@@ -494,25 +430,20 @@ static int server_recv_params(gnutls_session_t session,
 		}
 	}
 
-	_gnutls13_psk_parser_deinit(&psk_parser, &data, (size_t *) &len);
-
 	/* No suitable PSK found */
 	if (psk_index < 0)
 		return 0;
 
-	DECR_LEN(len, 2);
-	data += 2;
-
-	ret = server_find_binder(&data, &len,
-			psk_index, &binder_recvd);
+	/* Find the binder for the chosen PSK */
+	ret = _gnutls13_psk_ext_parser_find_binder(&psk_parser, psk_index,
+			&binder_recvd);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
-	if (binder_recvd.size == 0)
-		return gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
 
-	priv = gnutls_malloc(sizeof(psk_ext_st));
-	if (!priv) {
-		ret = gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+	ret = _gnutls13_psk_ext_parser_deinit(&psk_parser,
+			&data, (size_t *) &len);
+	if (ret < 0) {
+		gnutls_assert();
 		goto cleanup;
 	}
 
@@ -523,15 +454,18 @@ static int server_recv_params(gnutls_session_t session,
 	}
 
 	/* Compute the binder value for this PSK */
-	prf = _gnutls_mac_to_entry(pskcred->tls13_binder_algo);
+	if (!prf) {
+		ret = gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
+		goto cleanup;
+	}
 	hash_size = prf->output_size;
 	compute_psk_binder(GNUTLS_SERVER, prf, hash_size, hash_size, 0, 0, 0,
 			&key, &full_client_hello,
 			binder_value);
 	if (_gnutls_mac_get_algo_len(prf) != binder_recvd.size ||
 			safe_memcmp(binder_value, binder_recvd.data, binder_recvd.size)) {
-		_gnutls_free_datum(&binder_recvd);
-		return gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
+		ret = gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
+		goto cleanup;
 	}
 
 	session->internals.hsk_flags |= HSK_PSK_SELECTED;
@@ -539,7 +473,6 @@ static int server_recv_params(gnutls_session_t session,
 	session->key.proto.tls13.psk = key.data;
 	session->key.proto.tls13.psk_size = key.size;
 	session->key.proto.tls13.psk_selected = 0;
-	_gnutls_free_datum(&binder_recvd);
 
 cleanup:
 	_gnutls_free_datum(&binder_recvd);

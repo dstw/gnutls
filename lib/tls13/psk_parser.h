@@ -24,11 +24,11 @@
 #define PSK_PARSER_H
 #include "gnutls_int.h"
 
-struct psk_parser_st {
+struct psk_ext_parser_st {
 	unsigned char *data;
 	ssize_t len;
-	uint16_t identities_len;
-	uint16_t identities_read;
+	uint16_t obj_len;
+	uint16_t obj_read;
 	int next_index;
 };
 
@@ -38,12 +38,13 @@ struct psk_st {
 	int selected_index;
 };
 
-void _gnutls13_psk_parser_init(struct psk_parser_st *p,
-			      const unsigned char *data, size_t len,
-			      uint16_t ttl_identities_len);
-void _gnutls13_psk_parser_deinit(struct psk_parser_st *p,
+int _gnutls13_psk_ext_parser_init(struct psk_ext_parser_st *p,
+			      const unsigned char *data, size_t len);
+int _gnutls13_psk_ext_parser_deinit(struct psk_ext_parser_st *p,
 				 const unsigned char **data, size_t *len);
-int _gnutls13_psk_parser_next(struct psk_parser_st *p, struct psk_st *psk);
+int _gnutls13_psk_ext_parser_next_psk(struct psk_ext_parser_st *p, struct psk_st *psk);
+int _gnutls13_psk_ext_parser_find_binder(struct psk_ext_parser_st *p, int psk_index,
+		gnutls_datum_t *binder_out);
 
 #endif
 
