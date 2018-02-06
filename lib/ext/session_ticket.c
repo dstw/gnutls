@@ -267,12 +267,6 @@ cleanup:
 	return ret;
 }
 
-int _gnutls_decrypt_session_ticket(gnutls_session_t session, struct ticket_st *ticket)
-{
-	/* TODO this function is no longer needed and should be removed */
-	return 0;
-}
-
 static int
 session_ticket_recv_params(gnutls_session_t session,
 			   const uint8_t * data, size_t _data_size)
