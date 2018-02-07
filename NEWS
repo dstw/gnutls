@@ -12,6 +12,9 @@ See the end for copying conditions.
 
 ** libgnutls: Addressed issue in the AES-GCM accelerated under aarch64.
 
+** libgnutls: Backported stricter validation of time fields from 3.6.x branch.
+   Resolves issue #379.
+
 ** p11tool: Fixed issue preventing the deletion of objects in batch mode.
 
 ** API and ABI modifications:
