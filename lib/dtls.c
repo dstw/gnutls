@@ -505,6 +505,10 @@ unsigned _gnutls_record_overhead(const version_entry_st *ver,
 	int ret;
 	int hash_len = 0;
 
+	/* 1 octet content type in the unencrypted content */
+	if (ver->tls13_sem)
+		total++;
+
 	if (unlikely(cipher == NULL))
 		return 0;
 
