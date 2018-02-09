@@ -296,7 +296,6 @@ static int server_recv_params(gnutls_session_t session,
 	int ret;
 	const mac_entry_st *prf;
 	gnutls_datum_t full_client_hello;
-	psk_ext_st *priv = NULL;
 	uint8_t binder_value[MAX_HASH_SIZE];
 	int psk_index = -1;
 	gnutls_datum_t binder_recvd = { NULL, 0 };
@@ -344,12 +343,6 @@ static int server_recv_params(gnutls_session_t session,
 		goto cleanup;
 	}
 
-	priv = gnutls_malloc(sizeof(psk_ext_st));
-	if (!priv) {
-		ret = gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-		goto cleanup;
-	}
-
 	/* Get full ClientHello */
 	if (!_gnutls_ext_get_full_client_hello(session, &full_client_hello)) {
 		ret = 0;
@@ -379,9 +372,6 @@ static int server_recv_params(gnutls_session_t session,
 
 cleanup:
 	_gnutls_free_datum(&binder_recvd);
-
-	if (priv)
-		gnutls_free(priv);
 
 	return ret;
 }
@@ -486,12 +476,6 @@ static int _gnutls_psk_recv_params(gnutls_session_t session,
 	}
 }
 
-static void _gnutls_psk_deinit(gnutls_ext_priv_data_t epriv)
-{
-	if (epriv)
-		gnutls_free(epriv);
-}
-
 const hello_ext_entry_st ext_pre_shared_key = {
 	.name = "Pre Shared Key",
 	.tls_id = 41,
@@ -499,6 +483,5 @@ const hello_ext_entry_st ext_pre_shared_key = {
 	.parse_type = GNUTLS_EXT_TLS,
 	.validity = GNUTLS_EXT_FLAG_CLIENT_HELLO | GNUTLS_EXT_FLAG_TLS13_SERVER_HELLO,
 	.send_func = _gnutls_psk_send_params,
-	.recv_func = _gnutls_psk_recv_params,
-	.deinit_func = _gnutls_psk_deinit
+	.recv_func = _gnutls_psk_recv_params
 };
