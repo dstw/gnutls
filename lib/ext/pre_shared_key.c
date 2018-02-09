@@ -23,6 +23,7 @@
 #include "gnutls_int.h"
 #include "auth/psk.h"
 #include "secrets.h"
+#include "tls13/psk_ext_parser.h"
 #include "tls13/finished.h"
 #include "auth/psk_passwd.h"
 #include <ext/pre_shared_key.h>
@@ -288,97 +289,6 @@ server_send_params(gnutls_session_t session, gnutls_buffer_t extdata)
 	return 2;
 }
 
-static int
-server_read_identities(gnutls_session_t session,
-		const unsigned char **data_p, long *len_p,
-		uint16_t ttl_identities_len, gnutls_datum_t *key)
-{
-	int ret, psk_index = 0, psk_found = 0;
-	char *identity;
-	uint16_t identity_len;
-	uint16_t identities_read = 0;
-	const unsigned char *data = *data_p;
-	long len = *len_p;
-
-	/* Read a PskIdentity structure */
-	identity_len = _gnutls_read_uint16(data);
-	if (identity_len == 0)
-		return -1;
-
-	DECR_LEN(len, 2);
-	data += 2;
-	identities_read += 2;
-
-	identity = gnutls_calloc(1, identity_len + 1);
-	if (!identity)
-		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-	memcpy(identity, data, identity_len);
-
-	DECR_LEN(len, identity_len);
-	data += identity_len;
-	identities_read += identity_len;
-
-	/* Skip the obfuscated ticket age (we ignore it) */
-	DECR_LEN(len, 4);
-	data += 4;
-	identities_read += 4;
-
-	ret = _gnutls_psk_pwd_find_entry(session, identity, key);
-	gnutls_free(identity);
-
-	if (ret == 0)
-		psk_found = 1;
-
-	*len_p = len;
-	*data_p = data;
-	return (psk_found ? psk_index : ret);
-}
-
-static int
-server_read_binders(const unsigned char **data_p, long *len_p,
-		int psk_index, gnutls_datum_t *binder_recvd)
-{
-	uint8_t binder_len;
-	int cur_index = 0, binder_found = 0;
-	const unsigned char *data = *data_p;
-	long len = *len_p;
-
-	while (len > 0) {
-		DECR_LEN(len, 1);
-
-		binder_len = *data;
-		if (binder_len == 0)
-			return gnutls_assert_val(GNUTLS_E_ILLEGAL_PARAMETER);
-
-		data++;
-
-		if (cur_index == psk_index) {
-			binder_recvd->data = gnutls_malloc(binder_len);
-			if (!binder_recvd->data)
-				return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-
-			binder_recvd->size = binder_len;
-			DECR_LEN(len, binder_len);
-			memcpy(binder_recvd->data, data, binder_recvd->size);
-			data += binder_len;
-
-			binder_found = 1;
-			break;
-		}
-
-		DECR_LEN(len, binder_len);
-		data += binder_len;
-
-		binder_len = 0;
-		cur_index++;
-	}
-
-	*len_p = len;
-	*data_p = data;
-
-	return (binder_found ? binder_len : gnutls_assert_val(GNUTLS_E_ILLEGAL_PARAMETER));
-}
-
 static int server_recv_params(gnutls_session_t session,
 		const unsigned char *data, long len,
 		const gnutls_psk_server_credentials_t pskcred)
@@ -387,36 +297,52 @@ static int server_recv_params(gnutls_session_t session,
 	const mac_entry_st *prf;
 	gnutls_datum_t full_client_hello;
 	psk_ext_st *priv = NULL;
-	uint16_t ttl_identities_len;
 	uint8_t binder_value[MAX_HASH_SIZE];
-	int psk_index = 0;
+	int psk_index = -1;
 	gnutls_datum_t binder_recvd = { NULL, 0 };
 	gnutls_datum_t key;
 	unsigned hash_size;
+	psk_ext_parser_t psk_parser;
+	struct psk_st psk;
 
-	ttl_identities_len = _gnutls_read_uint16(data);
-	/* The client advertised no PSKs */
-	if (ttl_identities_len == 0)
+	ret = _gnutls13_psk_ext_parser_init(&psk_parser, data, len);
+	if (ret == 0) {
+		/* No PSKs advertised by client */
 		return 0;
+	} else if (ret < 0) {
+		return gnutls_assert_val(ret);
+	}
 
-	DECR_LEN(len, 2);
-	data += 2;
+	if (_gnutls13_psk_ext_parser_next_psk(psk_parser, &psk) >= 0) {
+		/* _gnutls_psk_pwd_find_entry() expects 0-terminated identities */
+		if (psk.identity.size > 0) {
+			char identity_str[psk.identity.size + 1];
 
-	psk_index = server_read_identities(session,
-			&data, &len,
-			ttl_identities_len, &key);
+			memcpy(identity_str, psk.identity.data, psk.identity.size);
+			identity_str[psk.identity.size] = 0;
+
+			ret = _gnutls_psk_pwd_find_entry(session, identity_str, &key);
+			if (ret == 0)
+				psk_index = psk.selected_index;
+		}
+	}
+
 	if (psk_index < 0)
 		return 0;
 
-	DECR_LEN(len, 2);
-	data += 2;
-
-	ret = server_read_binders(&data, &len,
-			psk_index, &binder_recvd);
+	ret = _gnutls13_psk_ext_parser_find_binder(psk_parser, psk_index,
+			&binder_recvd);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 	if (binder_recvd.size == 0)
 		return gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
+
+	ret = _gnutls13_psk_ext_parser_deinit(&psk_parser,
+			&data, (size_t *) &len);
+	if (ret < 0) {
+		gnutls_assert();
+		goto cleanup;
+	}
 
 	priv = gnutls_malloc(sizeof(psk_ext_st));
 	if (!priv) {
