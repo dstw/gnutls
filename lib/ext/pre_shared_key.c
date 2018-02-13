@@ -218,6 +218,8 @@ client_send_params(gnutls_session_t session,
 	unsigned hash_size = 0;
 	struct tls13_nst_st ticket;
 	const uint8_t *rms = NULL;
+	time_t cur_time;
+	int ticket_age;
 	uint32_t ob_ticket_age = 0;
 	gnutls_datum_t username = { NULL, 0 }, key = { NULL, 0 },
 			client_hello = { NULL, 0 };
@@ -248,6 +250,18 @@ client_send_params(gnutls_session_t session,
 				goto cleanup;
 			}
 
+			/* Check whether the ticket is stale */
+			cur_time = time(NULL);
+			ticket_age = cur_time - ticket.ticket_timestamp;
+			if (ticket_age < 0 || ticket_age > cur_time) {
+				ret = gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
+				goto cleanup;
+			}
+			if ((unsigned int ) ticket_age > ticket.ticket_lifetime) {
+				ret = 0;
+				goto cleanup;
+			}
+
 			username.data = ticket.ticket.data;
 			username.size = ticket.ticket.size;
 
@@ -262,7 +276,7 @@ client_send_params(gnutls_session_t session,
 			}
 
 			/* Calculate obfuscated ticket age, in milliseconds, mod 2^32 */
-			ob_ticket_age = (ticket.ticket_lifetime * 1000 + ticket.ticket_age_add) % 4294967296;
+			ob_ticket_age = (ticket_age * 1000 + ticket.ticket_age_add) % 4294967296;
 		}
 	}
 
@@ -373,8 +387,10 @@ static int server_recv_params(gnutls_session_t session,
 	int psk_index = -1;
 	gnutls_datum_t username = { NULL, 0 }, key = { NULL, 0 };
 	gnutls_datum_t binder_recvd = { NULL, 0 };
-	gnutls_datum_t ticket_data = { NULL, 0 }, rms = { NULL, 0 }, nonce = { NULL, 0 };
-	gnutls_mac_algorithm_t kdf_id;
+	gnutls_datum_t ticket_bytes = { NULL, 0 };
+	gnutls_datum_t ticket_nonce = { NULL, 0 };
+	int ticket_age;
+	struct tls13_ticket_data ticket_data;
 	unsigned hash_size;
 	struct psk_ext_parser_st psk_parser;
 	struct psk_st psk;
@@ -412,15 +428,24 @@ static int server_recv_params(gnutls_session_t session,
 			break;
 		}
 
-		ticket_data.data = psk.identity.data;
-		ticket_data.size = psk.identity.size;
-		if (_gnutls13_unpack_session_ticket(session, &ticket_data, &rms, &nonce, &kdf_id) > 0) {
+		ticket_bytes.data = psk.identity.data;
+		ticket_bytes.size = psk.identity.size;
+		if (_gnutls13_unpack_session_ticket(session, &ticket_bytes, &ticket_data) > 0) {
 			psk_index = psk.selected_index;
-			prf = _gnutls_mac_to_entry(kdf_id);
+			prf = _gnutls_mac_to_entry(ticket_data.kdf_id);
 			if (!prf)
 				return gnutls_assert_val(GNUTLS_E_INVALID_SESSION);
 
-			ret = compute_psk_from_ticket(prf, rms.data, &nonce, &key);
+			/* Check whether ticket is stale or not */
+			ticket_age = psk.ob_ticket_age - ticket_data.ticket_age_add;
+			if (ticket_age < 0)
+				return 0;
+			if ((unsigned int) (ticket_age / 1000) > ticket_data.ticket_lifetime)
+				return 0;
+
+			ticket_nonce.data = ticket_data.ticket_nonce;
+			ticket_nonce.size = ticket_data.ticket_nonce_len;
+			ret = compute_psk_from_ticket(prf, ticket_data.rms, &ticket_nonce, &key);
 			if (ret < 0)
 				return gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
 

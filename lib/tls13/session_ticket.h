@@ -23,10 +23,21 @@
 #define SESSION_TICKET_H
 
 struct tls13_nst_st {
+	time_t ticket_timestamp;
 	uint32_t ticket_lifetime;
 	uint32_t ticket_age_add;
 	gnutls_datum_t ticket_nonce;
 	gnutls_datum_t ticket;
+};
+
+struct tls13_ticket_data {
+	uint8_t *rms;
+	unsigned rms_len;
+	uint8_t *ticket_nonce;
+	unsigned ticket_nonce_len;
+	uint32_t ticket_age_add;
+	uint32_t ticket_lifetime;
+	gnutls_mac_algorithm_t kdf_id;
 };
 
 int _gnutls13_send_session_ticket(gnutls_session_t session, unsigned again);
@@ -35,8 +46,7 @@ int _gnutls13_recv_session_ticket(gnutls_session_t session,
 
 int _gnutls13_unpack_session_ticket(gnutls_session_t session,
 		gnutls_datum_t *data,
-		gnutls_datum_t *rms, gnutls_datum_t *nonce,
-		gnutls_mac_algorithm_t *kdf_id);
+		struct tls13_ticket_data *ticket_data);
 
 int _gnutls13_session_ticket_set(gnutls_session_t session,
 		struct tls13_nst_st *ticket,

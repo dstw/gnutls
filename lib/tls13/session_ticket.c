@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  *
  */
-
+#include <time.h>
 #include "gnutls_int.h"
 #include "errors.h"
 #include "extv.h"
@@ -38,21 +38,13 @@
 
 static int parse_nst_extension(void *ctx, uint16_t tls_id, const uint8_t *data, int data_size);
 
-struct tls13_ticket_data {
-	uint8_t *rms;
-	unsigned rms_len;
-	uint8_t *ticket_nonce;
-	unsigned ticket_nonce_len;
-	gnutls_mac_algorithm_t kdf_id;
-};
-
 static int pack_ticket(struct tls13_ticket_data *ticket_data,
 		gnutls_datum_t *state)
 {
 	unsigned char *p;
 
 	state->size = sizeof(uint16_t) +
-			sizeof(uint32_t) +
+			sizeof(uint32_t) * 3 +
 			ticket_data->rms_len +
 			sizeof(uint32_t) +
 			ticket_data->ticket_nonce_len;
@@ -64,6 +56,10 @@ static int pack_ticket(struct tls13_ticket_data *ticket_data,
 
 	_gnutls_write_uint16(ticket_data->kdf_id, p);
 	p += sizeof(uint16_t);
+	_gnutls_write_uint32(ticket_data->ticket_age_add, p);
+	p += sizeof(uint32_t);
+	_gnutls_write_uint32(ticket_data->ticket_lifetime, p);
+	p += sizeof(uint32_t);
 	_gnutls_write_uint32(ticket_data->rms_len, p);
 	p += sizeof(uint32_t);
 	memcpy(p, ticket_data->rms, ticket_data->rms_len);
@@ -78,10 +74,11 @@ static int pack_ticket(struct tls13_ticket_data *ticket_data,
 static int unpack_ticket(gnutls_datum_t *state,
 		struct tls13_ticket_data *data)
 {
-	int kdf;
-	unsigned rms_len, ticket_nonce_len;
+	int retval, kdf;
+	uint32_t ticket_age_add, ticket_lifetime;
+	gnutls_datum_t rms = { NULL, 0 }, ticket_nonce = { NULL, 0 };
 	unsigned char *p;
-	size_t expected_len = sizeof(uint16_t) + sizeof(uint32_t);
+	size_t expected_len = sizeof(uint16_t) + sizeof(uint32_t) * 3;
 
 	if (unlikely(state == NULL || data == NULL))
 		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
@@ -98,43 +95,66 @@ static int unpack_ticket(gnutls_datum_t *state,
 	if (_gnutls_mac_to_entry(kdf) == NULL)
 		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
 
-	data->kdf_id = (gnutls_mac_algorithm_t) kdf;
+	/* Read the ticket age add and the ticket lifetime */
+	ticket_age_add = _gnutls_read_uint32(p);
+	p += sizeof(uint32_t);
+
+	ticket_lifetime = _gnutls_read_uint32(p);
+	p += sizeof(uint32_t);
 
 	/*
 	 * Check if the whole ticket is large enough,
 	 * and read the resumption master secret
 	 */
-	rms_len = (unsigned) _gnutls_read_uint32(p);
+	rms.size = (unsigned) _gnutls_read_uint32(p);
 	p += sizeof(uint32_t);
 
-	expected_len += rms_len;
+	expected_len += rms.size;
 
 	if (state->size < expected_len)
 		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
 
-	data->rms_len = rms_len;
-	data->rms = gnutls_malloc(data->rms_len);
-	if (!data->rms)
-		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-	memcpy(data->rms, p, data->rms_len);
-	p += data->rms_len;
+	rms.data = gnutls_malloc(rms.size);
+	if (!rms.data) {
+		retval = gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+		goto error;
+	}
+	memcpy(rms.data, p, rms.size);
+	p += rms.size;
 
 	/* Read the ticket nonce */
-	ticket_nonce_len = (unsigned) _gnutls_read_uint32(p);
+	ticket_nonce.size = (unsigned) _gnutls_read_uint32(p);
 	p += sizeof(uint32_t);
 
-	expected_len += ticket_nonce_len;
+	expected_len += ticket_nonce.size;
 
-	if (state->size < ticket_nonce_len)
-		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
+	if (state->size < ticket_nonce.size) {
+		retval = gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
+		goto error;
+	}
 
-	data->ticket_nonce_len = ticket_nonce_len;
-	data->ticket_nonce = gnutls_malloc(data->ticket_nonce_len);
-	if (!data->ticket_nonce)
-		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
-	memcpy(data->ticket_nonce, p, data->ticket_nonce_len);
+	ticket_nonce.data = gnutls_malloc(ticket_nonce.size);
+	if (!ticket_nonce.data) {
+		retval = gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
+		goto error;
+	}
+	memcpy(ticket_nonce.data, p, ticket_nonce.size);
+
+	/* No errors - Now return all the data to the caller */
+	data->kdf_id = (gnutls_mac_algorithm_t) kdf;
+	data->rms = rms.data;
+	data->rms_len = rms.size;
+	data->ticket_nonce = ticket_nonce.data;
+	data->ticket_nonce_len = ticket_nonce.size;
+	data->ticket_age_add = ticket_age_add;
+	data->ticket_lifetime = ticket_lifetime;
 
 	return 0;
+
+error:
+	_gnutls_free_datum(&rms);
+	_gnutls_free_datum(&ticket_nonce);
+	return retval;
 }
 
 static int digest_ticket(const gnutls_datum_t *key, struct ticket_st *ticket,
@@ -318,6 +338,8 @@ static int generate_session_ticket(gnutls_session_t session, struct tls13_nst_st
 	tdata.ticket_nonce = ticket->ticket_nonce.data;
 	tdata.ticket_nonce_len = ticket->ticket_nonce.size;
 	tdata.kdf_id = kdf_id;
+	tdata.ticket_age_add = ticket->ticket_age_add;
+	tdata.ticket_lifetime = ticket->ticket_lifetime;
 	ret = pack_ticket(&tdata, &state);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
@@ -477,6 +499,9 @@ int _gnutls13_recv_session_ticket(gnutls_session_t session, gnutls_buffer_st *bu
 		goto cleanup;
 	}
 
+	/* Set the ticket timestamp */
+	ticket->ticket_timestamp = time(NULL);
+
 	ret = 0;
 cleanup:
 
@@ -489,17 +514,15 @@ cleanup:
  */
 int _gnutls13_unpack_session_ticket(gnutls_session_t session,
 		gnutls_datum_t *data,
-		gnutls_datum_t *rms, gnutls_datum_t *nonce,
-		gnutls_mac_algorithm_t *kdf_id)
+		struct tls13_ticket_data *ticket_data)
 {
 	int ret;
 	const unsigned char *p = data->data;
 	ssize_t data_size = data->size;
 	struct ticket_st ticket;
 	gnutls_datum_t decrypted;
-	struct tls13_ticket_data ticket_data;
 
-	if (unlikely(data == NULL || rms == NULL || kdf_id == NULL))
+	if (unlikely(data == NULL || ticket_data == NULL))
 		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
 	if (data_size == 0)
 		return 0;
@@ -556,17 +579,11 @@ int _gnutls13_unpack_session_ticket(gnutls_session_t session,
 	}
 
 	/* Return ticket parameters */
-	ret = unpack_ticket(&decrypted, &ticket_data);
+	ret = unpack_ticket(&decrypted, ticket_data);
 	if (ret < 0) {
 		session->internals.session_ticket_renew = 1;
 		return 0;
 	}
-
-	rms->data = ticket_data.rms;
-	rms->size = ticket_data.rms_len;
-	nonce->data = ticket_data.ticket_nonce;
-	nonce->size = ticket_data.ticket_nonce_len;
-	*kdf_id = ticket_data.kdf_id;
 
 	return decrypted.size;
 }
@@ -581,6 +598,7 @@ static int copy_ticket(struct tls13_nst_st *src, struct tls13_nst_st *dst)
 {
 	dst->ticket_lifetime = src->ticket_lifetime;
 	dst->ticket_age_add = src->ticket_age_add;
+	dst->ticket_timestamp = src->ticket_timestamp;
 
 	if (src->ticket_nonce.size > 0) {
 		dst->ticket_nonce.data = gnutls_malloc(src->ticket_nonce.size);

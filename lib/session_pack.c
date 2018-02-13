@@ -327,6 +327,8 @@ tls13_pack_security_parameters(gnutls_session_t session, gnutls_buffer_st *ps)
 
 	ret = _gnutls13_session_ticket_peek(session, &ticket);
 	if (likely(ret > 0)) {
+		BUFFER_APPEND_NUM(ps, ticket.ticket_timestamp);
+		length += 4;
 		BUFFER_APPEND_NUM(ps, ticket.ticket_lifetime);
 		length += 4;
 		BUFFER_APPEND_NUM(ps, ticket.ticket_age_add);
@@ -371,6 +373,7 @@ tls13_unpack_security_parameters(gnutls_session_t session, gnutls_buffer_st *ps,
 	BUFFER_POP_NUM(ps, ttl_len);
 
 	if (ttl_len > 0) {
+		BUFFER_POP_NUM(ps, ticket.ticket_timestamp);
 		BUFFER_POP_NUM(ps, ticket.ticket_lifetime);
 		BUFFER_POP_NUM(ps, ticket.ticket_age_add);
 		BUFFER_POP_DATUM(ps, &ticket.ticket_nonce);
