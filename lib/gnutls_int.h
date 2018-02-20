@@ -1304,6 +1304,7 @@ typedef struct {
 
 	void *tls13_ticket;
 	unsigned tls13_ticket_len;
+	int tls13_session_ticket_renew;
 
 	/* If you add anything here, check _gnutls_handshake_internal_state_clear().
 	 */

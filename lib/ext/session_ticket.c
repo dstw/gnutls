@@ -548,6 +548,7 @@ gnutls_session_ticket_enable_server(gnutls_session_t session,
 
 	memcpy(session->key.session_ticket_key, key->data, key->size);
 	session->internals.session_ticket_enable = 1;
+	session->internals.tls13_session_ticket_renew = 1;
 
 	return 0;
 }

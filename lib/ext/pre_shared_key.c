@@ -238,7 +238,7 @@ client_send_params(gnutls_session_t session,
 	}
 
 	/* No out-of-band PSKs - let's see if we have a session ticket to send */
-	if (prf == NULL) {
+	if (prf == NULL && session->internals.session_ticket_enable) {
 		ret = _gnutls13_session_ticket_get(session, &ticket);
 		if (ret > 0) {
 			/* We found a session ticket */
@@ -257,7 +257,7 @@ client_send_params(gnutls_session_t session,
 				ret = gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
 				goto cleanup;
 			}
-			if ((unsigned int ) ticket_age > ticket.ticket_lifetime) {
+			if ((unsigned int) ticket_age > ticket.ticket_lifetime) {
 				ret = 0;
 				goto cleanup;
 			}
@@ -394,6 +394,10 @@ static int server_recv_params(gnutls_session_t session,
 	unsigned hash_size;
 	struct psk_ext_parser_st psk_parser;
 	struct psk_st psk;
+	enum {
+		PSK = 1,
+		TICKET
+	} psk_kind = 0;
 
 	if (pskcred) {
 		/* No credentials - this extension is not applicable */
@@ -425,38 +429,52 @@ static int server_recv_params(gnutls_session_t session,
 		    safe_memcmp(username.data, psk.identity.data, psk.identity.size) == 0) {
 			psk_index = psk.selected_index;
 			prf = _gnutls_mac_to_entry(pskcred->tls13_binder_algo);
+			session->internals.tls13_session_ticket_renew = 0;
+			psk_kind = PSK;
 			break;
 		}
 
 		ticket_bytes.data = psk.identity.data;
 		ticket_bytes.size = psk.identity.size;
+
 		if (_gnutls13_unpack_session_ticket(session, &ticket_bytes, &ticket_data) > 0) {
 			psk_index = psk.selected_index;
 			prf = _gnutls_mac_to_entry(ticket_data.kdf_id);
 			if (!prf)
 				return gnutls_assert_val(GNUTLS_E_INVALID_SESSION);
 
+			session->internals.tls13_session_ticket_renew = 0;
+
 			/* Check whether ticket is stale or not */
 			ticket_age = psk.ob_ticket_age - ticket_data.ticket_age_add;
-			if (ticket_age < 0)
+			if (ticket_age < 0) {
+				session->internals.tls13_session_ticket_renew = 1;
 				return 0;
-			if ((unsigned int) (ticket_age / 1000) > ticket_data.ticket_lifetime)
+			}
+			if ((unsigned int) (ticket_age / 1000) > ticket_data.ticket_lifetime) {
+				session->internals.tls13_session_ticket_renew = 1;
 				return 0;
+			}
 
 			ticket_nonce.data = ticket_data.ticket_nonce;
 			ticket_nonce.size = ticket_data.ticket_nonce_len;
 			ret = compute_psk_from_ticket(prf, ticket_data.rms, &ticket_nonce, &key);
-			if (ret < 0)
+			if (ret < 0) {
+				session->internals.tls13_session_ticket_renew = 1;
 				return gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
+			}
 
-			session->internals.resumption_requested = 1;
-
+			psk_kind = TICKET;
 			break;
 		}
 	}
 
 	/* No suitable PSK found */
 	if (psk_index < 0)
+		return 0;
+
+	/* Are session tickets enabled? */
+	if (psk_kind == TICKET && !session->internals.session_ticket_enable)
 		return 0;
 
 	/* Find the binder for the chosen PSK */

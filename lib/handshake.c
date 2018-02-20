@@ -2480,7 +2480,8 @@ int gnutls_handshake(gnutls_session_t session)
 	 * Now we send a TLS 1.3 NewSessionTicket if requested.
 	 */
 	if (session->security_parameters.entity == GNUTLS_SERVER &&
-			get_version(session)->tls13_sem) {
+			get_version(session)->tls13_sem &&
+			session->internals.tls13_session_ticket_renew) {
 		ret = _gnutls13_send_session_ticket(session, AGAIN(STATE111));
 		STATE = STATE111;
 
