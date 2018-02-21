@@ -28,6 +28,7 @@ struct tls13_nst_st {
 	uint32_t ticket_age_add;
 	gnutls_datum_t ticket_nonce;
 	gnutls_datum_t ticket;
+	gnutls_datum_t rms;
 };
 
 struct tls13_ticket_data {

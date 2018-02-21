@@ -310,7 +310,7 @@ static int generate_session_ticket(gnutls_session_t session, struct tls13_nst_st
 	struct ticket_st encrypted_ticket;
 	/* This is the resumption master secret */
 	const uint8_t *rms = session->key.proto.tls13.ap_rms;
-	unsigned rms_len = MAX_HASH_SIZE;
+	unsigned rms_len = session->key.proto.tls13.temp_secret_size;
 	gnutls_mac_algorithm_t kdf_id;
 	struct tls13_ticket_data tdata;
 
@@ -624,6 +624,7 @@ void _gnutls13_session_ticket_destroy(struct tls13_nst_st *ticket)
 	if (ticket) {
 		_gnutls_free_datum(&ticket->ticket);
 		_gnutls_free_datum(&ticket->ticket_nonce);
+		_gnutls_free_datum(&ticket->rms);
 		memset(ticket, 0, sizeof(struct tls13_nst_st));
 	}
 }
@@ -710,9 +711,20 @@ int _gnutls13_session_ticket_get(gnutls_session_t session, struct tls13_nst_st *
 			return gnutls_assert_val(ret);
 		}
 
-		ret = session->internals.tls13_ticket_len;
+		if ((ret = _gnutls_set_datum(&dst->rms,
+				session->key.proto.tls13.ap_rms_original.data,
+				session->key.proto.tls13.ap_rms_original.size)) < 0) {
+			gnutls_assert();
+			goto error;
+		}
+
+		ret = session->internals.tls13_ticket_len + dst->rms.size;
 	}
 
+	return ret;
+
+error:
+	_gnutls13_session_ticket_destroy(dst);
 	return ret;
 }
 
@@ -732,11 +744,19 @@ int _gnutls13_session_ticket_peek(gnutls_session_t session, struct tls13_nst_st 
 		if (!src)
 			return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
 
-		if (dst)
+		if (dst) {
 			memcpy(dst, src, sizeof(struct tls13_nst_st));
+			memcpy(&dst->rms, &session->key.proto.tls13.ap_rms_original, sizeof(gnutls_datum_t));
+		}
 
-		ret = session->internals.tls13_ticket_len;
+		ret = session->internals.tls13_ticket_len + session->key.proto.tls13.ap_rms_original.size;
 	}
 
 	return ret;
+}
+
+int _gnutls13_session_ticket_unset(gnutls_session_t session)
+{
+	/* TODO implement this */
+	return 0;
 }

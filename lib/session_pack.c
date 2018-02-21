@@ -336,16 +336,15 @@ tls13_pack_security_parameters(gnutls_session_t session, gnutls_buffer_st *ps)
 		BUFFER_APPEND_PFX4(ps,
 				ticket.ticket_nonce.data,
 				ticket.ticket_nonce.size);
-
 		length += (4 + ticket.ticket_nonce.size);
 		BUFFER_APPEND_PFX4(ps,
 				ticket.ticket.data,
 				ticket.ticket.size);
 		length += (4 + ticket.ticket.size);
 		BUFFER_APPEND_PFX4(ps,
-				session->key.proto.tls13.ap_rms,
-				session->key.proto.tls13.temp_secret_size);
-		length += (4 + session->key.proto.tls13.temp_secret_size);
+				ticket.rms.data,
+				ticket.rms.size);
+		length += (4 + ticket.rms.size);
 
 		/* Overwrite the length field */
 		_gnutls_write_uint32(length, ps->data + length_pos);
