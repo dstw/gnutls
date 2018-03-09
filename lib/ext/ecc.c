@@ -115,7 +115,7 @@ static int
 _gnutls_supported_ecc_recv_params(gnutls_session_t session,
 				  const uint8_t * data, size_t _data_size)
 {
-	int ret, i;
+	int i;
 	ssize_t data_size = _data_size;
 	uint16_t len;
 	const uint8_t *p = data;
@@ -123,6 +123,10 @@ _gnutls_supported_ecc_recv_params(gnutls_session_t session,
 	unsigned have_ffdhe = 0;
 	unsigned tls_id;
 	unsigned min_dh;
+	unsigned j;
+	int serv_ec_pos, serv_dh_pos; /* position in server prio */
+	int cli_ec_pos, cli_dh_pos; /* position in client prio */
+
 
 	if (session->security_parameters.entity == GNUTLS_CLIENT) {
 		/* A client shouldn't receive this extension in TLS1.2. It is
@@ -148,11 +152,15 @@ _gnutls_supported_ecc_recv_params(gnutls_session_t session,
 		/* we figure what is the minimum DH allowed for this session, if any */
 		min_dh = get_min_dh(session);
 
-		/* This is being processed prior to a ciphersuite being selected */
+		serv_ec_pos = serv_dh_pos = -1;
+		cli_ec_pos = cli_dh_pos = -1;
+
+		/* This extension is being processed prior to a ciphersuite being selected,
+		 * so we cannot rely on ciphersuite information. */
 		for (i = 0; i < len; i += 2) {
-			if (have_ffdhe == 0 && p[i] == 0x01) {
+			if (have_ffdhe == 0 && p[i] == 0x01)
 				have_ffdhe = 1;
-			}
+
 			tls_id = _gnutls_read_uint16(&p[i]);
 			group = _gnutls_tls_id_to_group(tls_id);
 
@@ -160,24 +168,72 @@ _gnutls_supported_ecc_recv_params(gnutls_session_t session,
 			if (group == NULL)
 				continue;
 
-			/* if a DH group and less than expected ignore */
 			if (min_dh > 0 && group->prime && group->prime->size*8 < min_dh)
 				continue;
 
-			/* Check if we support this group */
-			if ((ret =
-			     _gnutls_session_supports_group(session,
-							    group->id))
-			    < 0) {
-				group = NULL;
-				continue;
-			} else {
-				if (group->pk == GNUTLS_PK_DH && session->internals.cand_dh_group == NULL)
-					session->internals.cand_dh_group = group;
-				else if (group->pk != GNUTLS_PK_DH && session->internals.cand_ec_group == NULL)
-					session->internals.cand_ec_group = group;
+			/* we simulate _gnutls_session_supports_group, but we prioritize if
+			 * %SERVER_PRECEDENCE is given */
+			for (j = 0; j < session->internals.priorities->groups.size; j++) {
+				if (session->internals.priorities->groups.entry[j]->id == group->id) {
+					if (session->internals.priorities->server_precedence) {
+						if (group->pk == GNUTLS_PK_DH) {
+							if (serv_dh_pos != -1 && (int)j > serv_dh_pos)
+								break;
+							serv_dh_pos = j;
+							cli_dh_pos = i;
+						} else if (group->pk != GNUTLS_PK_DH) {
+							if (serv_ec_pos != -1 && (int)j > serv_ec_pos)
+								break;
+							serv_ec_pos = j;
+							cli_ec_pos = i;
+						}
+					} else {
+						if (group->pk == GNUTLS_PK_DH) {
+							if (cli_dh_pos != -1)
+								break;
+							cli_dh_pos = i;
+							serv_dh_pos = j;
+						} else if (group->pk != GNUTLS_PK_DH) {
+							if (cli_ec_pos != -1)
+								break;
+							cli_ec_pos = i;
+							serv_ec_pos = j;
+						}
+					}
+					break;
+				}
+			}
+
+
+		}
+
+
+		if (session->internals.priorities->server_precedence) {
+			if (serv_dh_pos != -1) {
+				session->internals.cand_dh_group = session->internals.priorities->groups.entry[serv_dh_pos];
+				session->internals.cand_group = session->internals.cand_dh_group;
+			}
+
+			if (serv_ec_pos != -1) {
+				session->internals.cand_ec_group = session->internals.priorities->groups.entry[serv_ec_pos];
+				if (session->internals.cand_group == NULL || serv_ec_pos < serv_dh_pos)
+					session->internals.cand_group = session->internals.cand_ec_group;
+			}
+		} else {
+			if (cli_dh_pos != -1) {
+				session->internals.cand_dh_group = session->internals.priorities->groups.entry[serv_dh_pos];
+				session->internals.cand_group = session->internals.cand_dh_group;
+			}
+
+			if (cli_ec_pos != -1) {
+				session->internals.cand_ec_group = session->internals.priorities->groups.entry[serv_ec_pos];
+				if (session->internals.cand_group == NULL || cli_ec_pos < cli_dh_pos)
+					session->internals.cand_group = session->internals.cand_ec_group;
 			}
 		}
+
+		if (session->internals.cand_group)
+			_gnutls_handshake_log("EXT[%p]: Selected group %s\n", session, session->internals.cand_group->name);
 
 		if (have_ffdhe)
 			session->internals.hsk_flags |= HSK_HAVE_FFDHE;
