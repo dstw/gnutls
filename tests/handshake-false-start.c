@@ -286,19 +286,19 @@ void doit(void)
 
 	for (j=0;j<2;j++) {
 		for (i = 0; i < TESTNO_MAX; i++) {
-			try("anon-dh  :", i, 0, "NORMAL:-KX-ALL:+ANON-DH", 3072, j);
+			try("anon-dh  :", i, 0, "NORMAL:-VERS-ALL:+VERS-DTLS1.2:+VERS-TLS1.2:-KX-ALL:+ANON-DH", 3072, j);
 			reset_buffers();
-			try("anon-ecdh:", i, 0, "NORMAL:-KX-ALL:+ANON-ECDH", 2048, j);
+			try("anon-ecdh:", i, 0, "NORMAL:-VERS-ALL:+VERS-DTLS1.2:+VERS-TLS1.2:-KX-ALL:+ANON-ECDH", 2048, j);
 			reset_buffers();
-			try("ecdhe-rsa:", i, 1, "NORMAL:-KX-ALL:+ECDHE-RSA", 2048, j);
+			try("ecdhe-rsa:", i, 1, "NORMAL:-VERS-ALL:+VERS-DTLS1.2:+VERS-TLS1.2:-KX-ALL:+ECDHE-RSA", 2048, j);
 			reset_buffers();
-			try("ecdhe-x25519-rsa:", i, 1, "NORMAL:-KX-ALL:+ECDHE-RSA:-CURVE-ALL:+CURVE-X25519", 2048, j);
+			try("ecdhe-x25519-rsa:", i, 1, "NORMAL:-VERS-ALL:+VERS-DTLS1.2:+VERS-TLS1.2:-KX-ALL:+ECDHE-RSA:-CURVE-ALL:+CURVE-X25519", 2048, j);
 			reset_buffers();
-			try("ecdhe-ecdsa:", i, 1, "NORMAL:-KX-ALL:+ECDHE-ECDSA", 2048, j);
+			try("ecdhe-ecdsa:", i, 1, "NORMAL:-VERS-ALL:+VERS-DTLS1.2:+VERS-TLS1.2:-KX-ALL:+ECDHE-ECDSA", 2048, j);
 			reset_buffers();
-			try("dhe-rsa-2048:", i, 0, "NORMAL:-KX-ALL:+DHE-RSA", 2048, j);
+			try("dhe-rsa-2048:", i, 0, "NORMAL:-VERS-ALL:+VERS-DTLS1.2:+VERS-TLS1.2:-KX-ALL:+DHE-RSA", 2048, j);
 			reset_buffers();
-			try("dhe-rsa-3072:", i, 1, "NORMAL:-KX-ALL:+DHE-RSA", 3072, j);
+			try("dhe-rsa-3072:", i, 1, "NORMAL:-VERS-ALL:+VERS-DTLS1.2:+VERS-TLS1.2:-KX-ALL:+DHE-RSA", 3072, j);
 			reset_buffers();
 		}
 	}
