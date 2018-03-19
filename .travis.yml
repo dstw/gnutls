@@ -8,12 +8,6 @@ compiler:
 git:
   submodules: false
 
-notifications:
-  email:
-    on_success: change
-    on_failure: always
-
-
 before_install:
   - git submodule update --init
   - if [[ "$TRAVIS_OS_NAME" = "osx" ]]; then
